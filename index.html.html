@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Gantt Chart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .chart-container {
+            padding: 30px;
+            overflow-x: auto;
+        }
+
+        .gantt-chart {
+            display: grid;
+            grid-template-columns: 250px repeat(13, 1fr);
+            gap: 0;
+            min-width: 1000px;
+        }
+
+        .timeline-header {
+            display: contents;
+        }
+
+        .timeline-header .task-column {
+            background: #f8f9fa;
+            padding: 15px;
+            font-weight: 600;
+            border: 1px solid #e9ecef;
+            color: #495057;
+        }
+
+        .timeline-header .week {
+            background: #f8f9fa;
+            padding: 15px 5px;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #e9ecef;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        .phase {
+            display: contents;
+        }
+
+        .phase-header {
+            grid-column: 1 / -1;
+            background: #e9ecef;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 16px;
+            color: #343a40;
+            border: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .phase-1 { background: #e3f2fd; color: #1565c0; }
+        .phase-2 { background: #f3e5f5; color: #6a1b9a; }
+        .phase-3 { background: #e8f5e9; color: #2e7d32; }
+        .phase-4 { background: #fff3e0; color: #e65100; }
+
+        .task {
+            display: contents;
+        }
+
+        .task-name {
+            padding: 12px 15px;
+            border: 1px solid #e9ecef;
+            background: white;
+            font-size: 14px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+        }
+
+        .task-cell {
+            border: 1px solid #e9ecef;
+            background: white;
+            position: relative;
+            min-height: 44px;
+            overflow: visible;
+        }
+
+        .task-bar {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 32px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 15px;
+            z-index: 10;
+        }
+
+        .task-bar:hover {
+            transform: translateY(-50%) scale(1.02);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Style for connected task bars */
+        .task-bar[style*="left: 0"] {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .task-bar[style*="right: 10px"] {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .task-bar[style*="width: 100%"] {
+            border-radius: 0;
+        }
+
+        .task-bar[style*="width: calc(100% - 20px)"] {
+            /* Keep full border radius for standalone bars */
+        }
+
+        .task-bar[style*="width: calc(100% - 10px)"]:not([style*="left: 10px"]) {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .task-bar[style*="left: 10px"][style*="width: calc(100% - 10px)"] {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .bar-phase-1 { background: linear-gradient(135deg, #64b5f6, #42a5f5); }
+        .bar-phase-2 { background: linear-gradient(135deg, #ba68c8, #ab47bc); }
+        .bar-phase-3 { background: linear-gradient(135deg, #81c784, #66bb6a); }
+        .bar-phase-4 { background: linear-gradient(135deg, #ffb74d, #ffa726); }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(33, 37, 41, 0.95);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 13px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .tooltip.active {
+            opacity: 1;
+        }
+
+        .legend {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .gantt-chart {
+                grid-template-columns: 200px repeat(13, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AIMhi-Y Chatbot Development Project</h1>
+            <p>13-Week Project Timeline</p>
+        </div>
+
+        <div class="chart-container">
+            <div class="gantt-chart">
+                <!-- Timeline Header -->
+                <div class="timeline-header">
+                    <div class="task-column">Tasks / Weeks</div>
+                    <div class="week">W1</div>
+                    <div class="week">W2</div>
+                    <div class="week">W3</div>
+                    <div class="week">W4</div>
+                    <div class="week">W5</div>
+                    <div class="week">W6</div>
+                    <div class="week">W7</div>
+                    <div class="week">W8</div>
+                    <div class="week">W9</div>
+                    <div class="week">W10</div>
+                    <div class="week">W11</div>
+                    <div class="week">W12</div>
+                    <div class="week">W13</div>
+                </div>
+
+                <!-- Phase 1 -->
+                <div class="phase">
+                    <div class="phase-header phase-1">
+                        <span>📚</span> Phase 1: Research & Planning
+                    </div>
+                    
+                    <div class="task">
+                        <div class="task-name">Project choosing & supervisor selection</div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-1" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 1: Project choosing and supervisor selection"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Supervisor meeting & documents received</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-1" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 2: Supervisor meeting and documents received"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Literature review & AIMhi-Y analysis</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-1" style="left: 10px; width: calc(100% - 10px);" data-tooltip="Week 2: Begin literature review"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-1" style="left: 0; right: 10px; width: 100%;" data-tooltip="Week 3: Complete AIMhi-Y analysis"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Project plan formulated & submitted</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-1" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 3: Project plan formulated and submitted"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+                </div>
+
+                <!-- Phase 2 -->
+                <div class="phase">
+                    <div class="phase-header phase-2">
+                        <span>✏️</span> Phase 2: Design & Development
+                    </div>
+                    
+                    <div class="task">
+                        <div class="task-name">Initial coding & setup</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 3: Initial coding begins"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 4: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 5: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 6: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 7: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 8: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 9: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; width: 100%;" data-tooltip="Week 10: Continued development"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; right: 10px; width: calc(100% - 10px);" data-tooltip="Week 11: Development completion"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Functional specifications</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 4: Develop detailed functional specifications for the chatbot"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Rule-based logic & conversational flows</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 10px; width: calc(100% - 10px);" data-tooltip="Week 5: Design rule-based logic"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; right: 10px; width: 100%;" data-tooltip="Week 6: Implement conversational flows"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Chatbot scripts & content development</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 10px; width: calc(100% - 10px);" data-tooltip="Week 7: Draft chatbot scripts"></div>
+                        </div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-2" style="left: 0; right: 10px; width: 100%;" data-tooltip="Week 8: Cultural appropriateness and youth-friendly language"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+                </div>
+
+                <!-- Phase 3 -->
+                <div class="phase">
+                    <div class="phase-header phase-3">
+                        <span>💻</span> Phase 3: Implementation & Testing
+                    </div>
+                    
+                    <div class="task">
+                        <div class="task-name">UI mock-ups & interface design</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-3" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 9: Develop UI mock-ups for integration"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Integration & feature implementation</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-3" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 10: Complete integration and implement remaining features"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Internal testing & debugging</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-3" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 11: Conduct thorough internal testing and debugging"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                    </div>
+                </div>
+
+                <!-- Phase 4 -->
+                <div class="phase">
+                    <div class="phase-header phase-4">
+                        <span>📊</span> Phase 4: Finalization & Submission
+                    </div>
+                    
+                    <div class="task">
+                        <div class="task-name">Final refinements & optimizations</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-4" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 12: Final refinements and optimizations based on testing"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Documentation & code cleanup</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-4" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 12: Complete documentation and clean up codebase"></div>
+                        </div>
+                        <div class="task-cell"></div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Final report preparation</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-4" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 13: Prepare comprehensive final report"></div>
+                        </div>
+                    </div>
+
+                    <div class="task">
+                        <div class="task-name">Final submission to AIMhi team</div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell"></div>
+                        <div class="task-cell">
+                            <div class="task-bar bar-phase-4" style="left: 10px; width: calc(100% - 20px);" data-tooltip="Week 13: Submit final project to AIMhi team"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color bar-phase-1"></div>
+                <span>Phase 1: Research & Planning</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bar-phase-2"></div>
+                <span>Phase 2: Design & Development</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bar-phase-3"></div>
+                <span>Phase 3: Implementation & Testing</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bar-phase-4"></div>
+                <span>Phase 4: Finalization & Submission</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Tooltip functionality
+        const tooltip = document.getElementById('tooltip');
+        const elementsWithTooltip = document.querySelectorAll('[data-tooltip]');
+
+        elementsWithTooltip.forEach(element => {
+            element.addEventListener('mouseenter', (e) => {
+                const text = e.target.getAttribute('data-tooltip');
+                tooltip.textContent = text;
+                tooltip.classList.add('active');
+                
+                const rect = e.target.getBoundingClientRect();
+                
+                // Get the tooltip dimensions after setting content
+                tooltip.style.visibility = 'hidden';
+                tooltip.style.display = 'block';
+                const tooltipRect = tooltip.getBoundingClientRect();
+                tooltip.style.visibility = '';
+                tooltip.style.display = '';
+                
+                // Calculate position relative to the mouse cursor
+                let left = e.pageX + 10;
+                let top = e.pageY - tooltipRect.height - 10;
+                
+                // Adjust if tooltip goes off the right edge
+                if (left + tooltipRect.width > window.innerWidth + window.scrollX - 10) {
+                    left = e.pageX - tooltipRect.width - 10;
+                }
+                
+                // Adjust if tooltip goes off the top
+                if (top < window.scrollY + 10) {
+                    top = e.pageY + 10;
+                }
+                
+                // Adjust if tooltip goes off the bottom
+                if (top + tooltipRect.height > window.innerHeight + window.scrollY - 10) {
+                    top = e.pageY - tooltipRect.height - 10;
+                }
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            });
+            
+            element.addEventListener('mousemove', (e) => {
+                if (tooltip.classList.contains('active')) {
+                    const tooltipRect = tooltip.getBoundingClientRect();
+                    
+                    let left = e.pageX + 10;
+                    let top = e.pageY - tooltipRect.height - 10;
+                    
+                    // Adjust if tooltip goes off the right edge
+                    if (left + tooltipRect.width > window.innerWidth + window.scrollX - 10) {
+                        left = e.pageX - tooltipRect.width - 10;
+                    }
+                    
+                    // Adjust if tooltip goes off the top
+                    if (top < window.scrollY + 10) {
+                        top = e.pageY + 10;
+                    }
+                    
+                    // Adjust if tooltip goes off the bottom
+                    if (top + tooltipRect.height > window.innerHeight + window.scrollY - 10) {
+                        top = e.pageY - tooltipRect.height - 10;
+                    }
+                    
+                    tooltip.style.left = left + 'px';
+                    tooltip.style.top = top + 'px';
+                }
+            });
+            
+            element.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('active');
+            });
+        });
+
+        // Smooth scroll to today's date (approximately week 1 in this example)
+        const chartContainer = document.querySelector('.chart-container');
+        chartContainer.scrollLeft = 0;
+    </script>
+</body>
+</html>
